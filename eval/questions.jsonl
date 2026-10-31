@@ -1,0 +1,10 @@
+{"id": "q01", "type": "fact", "question": "Quel est le chiffre d'affaires consolidé de Maroc Telecom en 2023 ?", "company": "maroc_telecom", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q02", "type": "fact", "question": "Quel est le résultat net part du groupe d'Attijariwafa bank en 2023 ?", "company": "attijariwafa", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q03", "type": "fact", "question": "What was Cosumar's sugar production volume in 2023?", "company": "cosumar", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q04", "type": "fact", "question": "ما هو رقم معاملات مرسى المغرب سنة 2023؟", "company": "marsa_maroc", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q05", "type": "calculate", "question": "Quelle est la marge nette de Label'Vie en 2023 (résultat net / chiffre d'affaires) ?", "company": "labelvie", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q06", "type": "calculate", "question": "De combien de pourcents le chiffre d'affaires de Cosumar a-t-il évolué entre 2022 et 2023 ?", "company": "cosumar", "year": null, "pages": [], "expected_numbers": []}
+{"id": "q07", "type": "compare", "question": "Compare le résultat net de Maroc Telecom et de Marsa Maroc en 2023.", "company": null, "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q08", "type": "fact", "question": "Quels sont les principaux risques cités par Attijariwafa bank dans son rapport 2023 ?", "company": "attijariwafa", "year": "2023", "pages": [], "expected_numbers": []}
+{"id": "q09", "type": "unanswerable", "question": "Quel sera le cours de l'action Maroc Telecom en 2030 ?", "company": "maroc_telecom", "year": null}
+{"id": "q10", "type": "unanswerable", "question": "Quel est le salaire du directeur marketing de Cosumar ?", "company": "cosumar", "year": "2023"}

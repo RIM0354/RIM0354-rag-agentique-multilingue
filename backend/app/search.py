@@ -36,6 +36,15 @@ def hybrid_search(query: str, k: int = 5, company: str | None = None, year: str 
     return [{"score": p.score, **p.payload} for p in result.points]
 
 
+def list_companies(client: QdrantClient | None = None) -> list[str]:
+    """Entreprises présentes dans l'index (utilisé par le routeur et le front)."""
+    client = client or QdrantClient(url=QDRANT_URL)
+    try:
+        return sorted(hit.value for hit in client.facet(COLLECTION, key="company", limit=200).hits)
+    except Exception:
+        return []
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("query")

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "analyste-financier-maroc": {
+      "command": "/CHEMIN/VERS/rag-agentique-multilingue/backend/.venv/bin/python",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "/CHEMIN/VERS/rag-agentique-multilingue/backend"
+    }
+  }
+}

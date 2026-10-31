@@ -8,3 +8,4 @@ data/tables/
 .DS_Store
 node_modules/
 .next/
+eval/results/
