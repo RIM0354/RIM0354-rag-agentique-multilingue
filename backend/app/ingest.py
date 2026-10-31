@@ -5,6 +5,7 @@ Usage (depuis le dossier backend/) :
     python -m app.ingest --company cosumar  # une seule entreprise
     python -m app.ingest --reset          # recrée la collection avant d'indexer
     python -m app.ingest --skip-done      # saute les rapports déjà indexés
+    python -m app.ingest --fast-tables    # tableaux en mode rapide (CPU sans GPU)
     python -m app.ingest --ocr            # active l'OCR (PDF scannés, beaucoup plus lent)
 
 Arborescence attendue : data/raw/<entreprise>/<annee>.pdf
@@ -17,7 +18,7 @@ from pathlib import Path
 
 from docling.chunking import HybridChunker
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from qdrant_client import QdrantClient, models
 from tqdm import tqdm
@@ -31,9 +32,11 @@ from .embeddings import embed_dense, embed_sparse
 BATCH_SIZE = 32
 
 
-def make_converter(ocr: bool) -> DocumentConverter:
+def make_converter(ocr: bool, fast_tables: bool = False) -> DocumentConverter:
     """Les rapports AMMC sont des PDF numériques : sans OCR, la lecture est bien plus rapide sur CPU."""
     options = PdfPipelineOptions(do_ocr=ocr, do_table_structure=True)
+    if fast_tables:  # 2 à 3 fois plus rapide sur CPU, tableaux un peu moins précis
+        options.table_structure_options.mode = TableFormerMode.FAST
     options.accelerator_options.num_threads = os.cpu_count() or 4
     return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
 
@@ -153,6 +156,7 @@ def main() -> None:
     parser.add_argument("--reset", action="store_true", help="recréer la collection")
     parser.add_argument("--skip-done", action="store_true", help="sauter les rapports déjà dans Qdrant")
     parser.add_argument("--ocr", action="store_true", help="activer l'OCR (lent, pour PDF scannés)")
+    parser.add_argument("--fast-tables", action="store_true", help="lecture des tableaux en mode rapide")
     args = parser.parse_args()
 
     pdfs = sorted(RAW_DIR.glob(f"{args.company or '*'}/*.pdf"))
@@ -161,7 +165,7 @@ def main() -> None:
 
     client = QdrantClient(url=QDRANT_URL)
     ensure_collection(client, args.reset)
-    converter, chunker = make_converter(args.ocr), make_chunker()
+    converter, chunker = make_converter(args.ocr, args.fast_tables), make_chunker()
     if args.skip_done and not args.reset:
         pdfs = [p for p in pdfs if not already_indexed(client, p.parent.name, p.stem)]
         print(f"{len(pdfs)} rapport(s) restant(s) à indexer.")
