@@ -170,13 +170,14 @@ def ingest_pdf(pdf: Path, converter: DocumentConverter, chunker: HybridChunker, 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Indexe les rapports PDF dans Qdrant")
     parser.add_argument("--company", help="n'indexer qu'une entreprise (nom du dossier)")
+    parser.add_argument("--year", help="n'indexer qu'une année (nom du fichier, ex. 2023)")
     parser.add_argument("--reset", action="store_true", help="recréer la collection")
     parser.add_argument("--skip-done", action="store_true", help="sauter les rapports déjà dans Qdrant")
     parser.add_argument("--ocr", action="store_true", help="activer l'OCR (lent, pour PDF scannés)")
     parser.add_argument("--fast-tables", action="store_true", help="lecture des tableaux en mode rapide")
     args = parser.parse_args()
 
-    pdfs = sorted(RAW_DIR.glob(f"{args.company or '*'}/*.pdf"))
+    pdfs = sorted(RAW_DIR.glob(f"{args.company or '*'}/{args.year or '*'}.pdf"))
     if not pdfs:
         raise SystemExit(f"Aucun PDF trouvé dans {RAW_DIR}/<entreprise>/<annee>.pdf")
 
