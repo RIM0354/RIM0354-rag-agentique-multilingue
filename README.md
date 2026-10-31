@@ -2,7 +2,7 @@
 
 Astrolabe répond en français, anglais et arabe à des questions sur les rapports annuels des sociétés cotées à la Bourse de Casablanca, en citant la page source de chaque chiffre.
 
-> Projet en cours de construction. Étape actuelle : **jour 1, ingestion des rapports**.
+> Projet en cours de construction. Étape actuelle : **jour 2, RAG complet avec reranking et API**.
 
 ## Démarrage rapide (jour 1)
 
@@ -32,6 +32,18 @@ python -m app.search "chiffre d'affaires consolidé" --company maroc_telecom --y
 ```
 
 Le premier lancement télécharge les modèles (environ 2 à 3 Go) : c'est normal qu'il soit long.
+
+## Jour 2 : poser une question
+
+```bash
+# Dans backend/, avec GROQ_API_KEY rempli dans .env
+python -m app.rag "Quel est le chiffre d'affaires de Maroc Telecom en 2023 ?" --company maroc_telecom
+
+# Ou via l'API (documentation interactive sur http://localhost:8000/docs)
+uvicorn app.api:app --reload
+```
+
+Pipeline : recherche hybride (30 candidats) → reranking **bge-reranker-v2-m3** (5 meilleurs) → **Llama 3.3 70B via Groq**, qui répond dans la langue de la question en citant chaque source [n], avec l'entreprise, l'année et la page.
 
 ## Ce que fait l'ingestion
 

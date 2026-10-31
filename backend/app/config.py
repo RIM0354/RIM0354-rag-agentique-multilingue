@@ -20,6 +20,7 @@ COLLECTION = os.getenv("QDRANT_COLLECTION", "rapports")
 DENSE_MODEL = os.getenv("DENSE_MODEL", "BAAI/bge-m3")   # multilingue FR / EN / AR, 1024 dimensions
 DENSE_DIM = 1024
 SPARSE_MODEL = os.getenv("SPARSE_MODEL", "Qdrant/bm25")  # mots-clés (BM25)
+RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")  # multilingue
 MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "512"))
 
 # LLM (utilisé à partir du jour 2)
