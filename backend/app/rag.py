@@ -5,9 +5,7 @@ Test rapide (depuis backend/) :
 """
 import argparse
 
-from groq import Groq
-
-from .config import GROQ_API_KEY, LLM_MODEL
+from .llm import chat
 from .rerank import rerank
 from .search import hybrid_search
 
@@ -33,21 +31,13 @@ def answer(question: str, company: str | None = None, year: str | None = None, k
     if not passages:
         return {"answer": "Je n'ai trouvé aucun extrait pertinent dans les rapports indexés.", "sources": []}
 
-    client = Groq(api_key=GROQ_API_KEY)
-    completion = client.chat.completions.create(
-        model=LLM_MODEL,
-        temperature=0,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Extraits :\n\n{format_context(passages)}\n\nQuestion : {question}"},
-        ],
-    )
+    text = chat(SYSTEM_PROMPT, f"Extraits :\n\n{format_context(passages)}\n\nQuestion : {question}")
     sources = [
         {"n": i, "company": p["company"], "year": p["year"], "page": p["page"],
          "source": p["source"], "excerpt": p["text"][:300]}
         for i, p in enumerate(passages, 1)
     ]
-    return {"answer": completion.choices[0].message.content, "sources": sources}
+    return {"answer": text, "sources": sources}
 
 
 def main() -> None:

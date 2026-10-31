@@ -23,6 +23,9 @@ SPARSE_MODEL = os.getenv("SPARSE_MODEL", "Qdrant/bm25")  # mots-clés (BM25)
 RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")  # multilingue
 MAX_TOKENS_PER_CHUNK = int(os.getenv("MAX_TOKENS_PER_CHUNK", "512"))
 
-# LLM (utilisé à partir du jour 2)
+# LLM : Gemini (Google AI Studio) ou Groq. Par défaut, Gemini si sa clé est présente.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini" if GEMINI_API_KEY or not GROQ_API_KEY else "groq").lower()
+_DEFAULT_MODELS = {"gemini": "gemini-2.5-flash", "groq": "llama-3.3-70b-versatile"}
+LLM_MODEL = os.getenv("LLM_MODEL") or _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash")
