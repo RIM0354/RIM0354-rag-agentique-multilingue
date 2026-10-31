@@ -4,16 +4,21 @@ Usage (depuis le dossier backend/) :
     python -m app.ingest                  # tous les PDF de data/raw
     python -m app.ingest --company cosumar  # une seule entreprise
     python -m app.ingest --reset          # recrée la collection avant d'indexer
+    python -m app.ingest --skip-done      # saute les rapports déjà indexés
+    python -m app.ingest --ocr            # active l'OCR (PDF scannés, beaucoup plus lent)
 
 Arborescence attendue : data/raw/<entreprise>/<annee>.pdf
     ex. data/raw/maroc_telecom/2023.pdf
 """
 import argparse
+import os
 import uuid
 from pathlib import Path
 
 from docling.chunking import HybridChunker
-from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from qdrant_client import QdrantClient, models
 from tqdm import tqdm
 
@@ -24,6 +29,21 @@ from .config import (
 from .embeddings import embed_dense, embed_sparse
 
 BATCH_SIZE = 32
+
+
+def make_converter(ocr: bool) -> DocumentConverter:
+    """Les rapports AMMC sont des PDF numériques : sans OCR, la lecture est bien plus rapide sur CPU."""
+    options = PdfPipelineOptions(do_ocr=ocr, do_table_structure=True)
+    options.accelerator_options.num_threads = os.cpu_count() or 4
+    return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
+
+
+def already_indexed(client: QdrantClient, company: str, year: str) -> bool:
+    flt = models.Filter(must=[
+        models.FieldCondition(key="company", match=models.MatchValue(value=company)),
+        models.FieldCondition(key="year", match=models.MatchValue(value=year)),
+    ])
+    return client.count(COLLECTION, count_filter=flt, exact=True).count > 0
 
 
 def make_chunker() -> HybridChunker:
@@ -131,6 +151,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Indexe les rapports PDF dans Qdrant")
     parser.add_argument("--company", help="n'indexer qu'une entreprise (nom du dossier)")
     parser.add_argument("--reset", action="store_true", help="recréer la collection")
+    parser.add_argument("--skip-done", action="store_true", help="sauter les rapports déjà dans Qdrant")
+    parser.add_argument("--ocr", action="store_true", help="activer l'OCR (lent, pour PDF scannés)")
     args = parser.parse_args()
 
     pdfs = sorted(RAW_DIR.glob(f"{args.company or '*'}/*.pdf"))
@@ -139,7 +161,10 @@ def main() -> None:
 
     client = QdrantClient(url=QDRANT_URL)
     ensure_collection(client, args.reset)
-    converter, chunker = DocumentConverter(), make_chunker()
+    converter, chunker = make_converter(args.ocr), make_chunker()
+    if args.skip_done and not args.reset:
+        pdfs = [p for p in pdfs if not already_indexed(client, p.parent.name, p.stem)]
+        print(f"{len(pdfs)} rapport(s) restant(s) à indexer.")
 
     total, failed = 0, []
     for pdf in tqdm(pdfs, desc="Rapports"):
