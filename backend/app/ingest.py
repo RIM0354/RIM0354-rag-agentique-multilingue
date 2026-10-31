@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 from docling.chunking import HybridChunker
+from docling_core.types.doc import DoclingDocument
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -68,7 +69,14 @@ def ensure_collection(client: QdrantClient, reset: bool) -> None:
     if exists and reset:
         client.delete_collection(COLLECTION)
         exists = False
-    if not exists:
+    if exists:
+        size = client.get_collection(COLLECTION).config.params.vectors["dense"].size
+        if size != DENSE_DIM:
+            raise SystemExit(
+                f"La collection '{COLLECTION}' a des vecteurs de {size} dimensions, mais le modèle actuel "
+                f"en produit {DENSE_DIM}. Relancez avec --reset."
+            )
+    else:
         client.create_collection(
             COLLECTION,
             vectors_config={"dense": models.VectorParams(size=DENSE_DIM, distance=models.Distance.COSINE)},
@@ -109,10 +117,19 @@ def save_tables(doc, company: str, year: str) -> int:
 
 def ingest_pdf(pdf: Path, converter: DocumentConverter, chunker: HybridChunker, client: QdrantClient) -> int:
     company, year = pdf.parent.name, pdf.stem
-    doc = converter.convert(pdf).document
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # La conversion docling est l'étape la plus longue : on garde le résultat en JSON
+    # pour ne jamais la refaire (ré-indexation, changement de modèle d'embeddings...).
+    cache = PROCESSED_DIR / f"{company}_{year}.json"
+    if cache.exists():
+        doc = DoclingDocument.load_from_json(cache)
+        print(f"  {company} {year} : conversion déjà faite, lecture du cache")
+    else:
+        doc = converter.convert(pdf).document
+        doc.save_as_json(cache)
 
     # Sauvegarde du Markdown pour vérifier la qualité du parsing à l'oeil
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     (PROCESSED_DIR / f"{company}_{year}.md").write_text(doc.export_to_markdown(), encoding="utf-8")
     n_tables = save_tables(doc, company, year)
 

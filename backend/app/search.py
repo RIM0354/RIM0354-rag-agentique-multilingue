@@ -8,7 +8,7 @@ import argparse
 from qdrant_client import QdrantClient, models
 
 from .config import COLLECTION, QDRANT_URL
-from .embeddings import embed_dense, embed_sparse_query
+from .embeddings import embed_dense_query, embed_sparse_query
 
 
 def build_filter(company: str | None = None, year: str | None = None) -> models.Filter | None:
@@ -26,7 +26,7 @@ def hybrid_search(query: str, k: int = 5, company: str | None = None, year: str 
     result = client.query_points(
         COLLECTION,
         prefetch=[
-            models.Prefetch(query=embed_dense([query])[0], using="dense", limit=30, filter=flt),
+            models.Prefetch(query=embed_dense_query(query), using="dense", limit=30, filter=flt),
             models.Prefetch(query=embed_sparse_query(query), using="bm25", limit=30, filter=flt),
         ],
         query=models.FusionQuery(fusion=models.Fusion.RRF),
