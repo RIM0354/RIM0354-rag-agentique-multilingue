@@ -1,64 +1,108 @@
 # RAG agentique multilingue : analyste financier IA (Astrolabe)
 
-Astrolabe répond en français, anglais et arabe à des questions sur les rapports annuels des sociétés cotées à la Bourse de Casablanca, en citant la page source de chaque chiffre.
+Astrolabe répond en français, anglais et arabe à des questions sur les rapports financiers des sociétés cotées à la Bourse de Casablanca. Des agents IA cherchent les bons passages, calculent les ratios avec du code, vérifient la réponse et citent la page source de chaque chiffre.
 
-> Projet en cours de construction. Étape actuelle : **jour 2, RAG complet avec reranking et API**.
+**Stack** : Docling · BGE-M3 + BM25 · Qdrant · bge-reranker-v2-m3 · LangGraph · Llama 3.3 (Groq) · FastAPI · MCP · Langfuse · Next.js · Tailwind · Framer Motion · Supabase Auth · Docker
 
-## Démarrage rapide (jour 1)
+## Architecture
 
-Prérequis : Python 3.11 ou 3.12, Docker Desktop.
+```
+PDF (data/raw) ─► Docling ─► chunks + tableaux ─► BGE-M3 (sens) + BM25 (mots-clés) ─► Qdrant
+                                                                                     │
+Question ─► Garde-fou ─► Routeur ─► Chercheur (recherche hybride + reranking) ◄──────┘
+                            │             │
+                            │             ├─► Calculateur (le LLM extrait les chiffres, le code calcule)
+                            │             ▼
+                            │         Rédacteur ─► Vérificateur ──(non fidèle)──► Rédacteur
+                            ▼                           │
+                     Refus (hors sujet)          Réponse + citations [n] + page
+```
+
+Accès : API FastAPI (avec streaming des étapes), serveur MCP (Claude Desktop), front Next.js.
+
+## Installation
+
+Prérequis : Python 3.11 ou 3.12, Node.js 20+, Docker Desktop. Clés gratuites : [Groq](https://console.groq.com) (obligatoire), [Supabase](https://supabase.com) et [Langfuse](https://cloud.langfuse.com) (optionnels).
+
+### 1. Back-end
 
 ```bash
-# 1. Lancer la base vectorielle Qdrant
-docker compose up -d
+cp .env.example .env              # puis remplir GROQ_API_KEY
+docker compose up -d              # lance Qdrant
 
-# 2. Créer l'environnement Python
 cd backend
 python -m venv .venv
-source .venv/bin/activate        # Windows : .venv\Scripts\activate
+source .venv/bin/activate         # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
-
-# 3. Copier la configuration
-cp ../.env.example ../.env       # puis remplir GROQ_API_KEY
-
-# 4. Déposer les PDF ici :  data/raw/<entreprise>/<annee>.pdf
-#    ex. data/raw/maroc_telecom/2023.pdf   (noms en minuscules, sans espaces)
-
-# 5. Indexer
-python -m app.ingest --reset
-
-# 6. Tester une recherche
-python -m app.search "chiffre d'affaires consolidé" --company maroc_telecom --year 2023
 ```
 
-Le premier lancement télécharge les modèles (environ 2 à 3 Go) : c'est normal qu'il soit long.
+### 2. Indexer les rapports
 
-## Jour 2 : poser une question
+Déposez les PDF dans `data/raw/<entreprise>/<annee>.pdf` (minuscules, sans espaces), par exemple `data/raw/cosumar/2023.pdf`.
 
 ```bash
-# Dans backend/, avec GROQ_API_KEY rempli dans .env
-python -m app.rag "Quel est le chiffre d'affaires de Maroc Telecom en 2023 ?" --company maroc_telecom
-
-# Ou via l'API (documentation interactive sur http://localhost:8000/docs)
-uvicorn app.api:app --reload
+python -m app.ingest --reset      # le premier lancement télécharge les modèles (2 à 3 Go)
+python -m app.search "chiffre d'affaires consolidé" --company cosumar --year 2023
 ```
 
-Pipeline : recherche hybride (30 candidats) → reranking **bge-reranker-v2-m3** (5 meilleurs) → **Llama 3.3 70B via Groq**, qui répond dans la langue de la question en citant chaque source [n], avec l'entreprise, l'année et la page.
+Vérifiez la qualité du parsing dans `data/processed/*.md` et les tableaux dans `data/tables/`.
 
-## Ce que fait l'ingestion
+### 3. Poser des questions
 
-1. **Docling** lit chaque PDF : texte, titres et tableaux, avec OCR pour les pages scannées.
-2. Le Markdown extrait est sauvegardé dans `data/processed/` pour vérifier la qualité à l'oeil.
-3. Chaque tableau est exporté en CSV dans `data/tables/` (pour l'agent calculateur).
-4. Le document est découpé en chunks qui respectent la structure (un tableau n'est pas coupé), précédés de leurs titres de section.
-5. Chaque chunk reçoit deux représentations : **BGE-M3** (sens, multilingue) et **BM25** (mots-clés), stockées dans **Qdrant** avec ses métadonnées (entreprise, année, page).
-6. La recherche combine les deux classements par **fusion RRF** (recherche hybride).
+```bash
+python -m app.rag "Quel est le chiffre d'affaires de Cosumar en 2023 ?"          # RAG simple
+python -m app.agents "De combien a évolué le CA de Cosumar entre 2022 et 2023 ?"  # agents
+uvicorn app.api:app --reload      # API sur http://localhost:8000/docs
+```
 
-## Architecture cible
+### 4. Front-end
 
-Ingestion (Docling, BGE-M3, Qdrant) → agents LangGraph (chercheur, calculateur, vérificateur) → API FastAPI + serveur MCP → front Next.js animé avec connexion Supabase.
+```bash
+cd frontend
+cp .env.local.example .env.local  # Supabase optionnel : sans clés, mode démo sans connexion
+npm install
+npm run dev                       # http://localhost:3000
+```
 
-## Feuille de route
+Pages : accueil animé, connexion / inscription / mot de passe oublié / Google, chat avec les étapes des agents en direct, citations cliquables, mode sombre.
 
-- **V1 (en cours)** : recherche hybride + reranking, agents LangGraph, garde-fous, serveur MCP, évaluation RAGAS et traces Langfuse, front Next.js avec connexion, déploiement Docker.
-- **V2** : GraphRAG (Neo4j), RAG multimodal (ColPali), fine-tuning LoRA d'un petit modèle routeur servi avec vLLM, Kubernetes.
+Pour activer la connexion : créez un projet Supabase, copiez l'URL et la clé `anon` dans `frontend/.env.local`, et le **JWT Secret** dans `.env` (`SUPABASE_JWT_SECRET`) pour que l'API vérifie les jetons. Pour Google, activez le fournisseur dans Supabase > Authentication > Providers.
+
+### 5. Serveur MCP (Claude Desktop)
+
+```bash
+python -m app.mcp_server
+```
+
+Copiez `docs/claude_desktop_config.json` dans la configuration de Claude Desktop en remplaçant les chemins. Outils exposés : `list_indexed_companies`, `search_reports`, `ask_financial_analyst`.
+
+### 6. Évaluation
+
+```bash
+python -m app.evaluate --mode simple   # RAG simple
+python -m app.evaluate                 # agents
+```
+
+Mesures : Recall@5, MRR, chiffres exacts, fidélité (LLM juge), refus correct, latence. Voir `eval/README.md` pour compléter le jeu de test.
+
+## Résultats
+
+À compléter après l'évaluation sur les vrais rapports :
+
+| Version | Recall@5 | MRR | Chiffres exacts | Fidélité | Refus correct | Latence |
+| --- | --- | --- | --- | --- | --- | --- |
+| RAG simple | | | | | | |
+| Agents | | | | | | |
+
+## Feuille de route (V2)
+
+- GraphRAG avec Neo4j (relations entre entreprises, dirigeants, filiales)
+- RAG multimodal avec ColPali (graphiques et tableaux scannés)
+- Fine-tuning LoRA d'un petit modèle routeur, servi avec vLLM
+- Déploiement Kubernetes, visionneuse PDF avec surlignage, tableau de bord des ratios
+
+## Limites connues
+
+- Les tableaux complexes ou scannés peuvent être mal extraits par Docling.
+- La vérification de fidélité repose sur un LLM juge, qui peut lui-même se tromper.
+- Outil d'aide à l'analyse : ce n'est pas un conseil en investissement.
