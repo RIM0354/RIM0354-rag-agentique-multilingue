@@ -9,3 +9,5 @@ data/tables/
 node_modules/
 .next/
 eval/results/
+.env.*
+!.env.example
