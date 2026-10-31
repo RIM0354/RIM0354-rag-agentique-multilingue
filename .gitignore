@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/raw/**/*.pdf
+data/processed/
+data/tables/
+.DS_Store
+node_modules/
+.next/

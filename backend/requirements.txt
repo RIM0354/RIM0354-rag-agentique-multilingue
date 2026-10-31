@@ -1,0 +1,8 @@
+docling>=2.30
+qdrant-client>=1.12
+sentence-transformers>=3.0
+fastembed>=0.5
+transformers>=4.44
+python-dotenv>=1.0
+tqdm>=4.66
+pandas>=2.2
