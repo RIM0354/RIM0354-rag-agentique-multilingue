@@ -11,11 +11,20 @@ from .config import COLLECTION, QDRANT_URL
 from .embeddings import embed_dense_query, embed_sparse_query
 
 
+def report_years(year: str | None) -> list[str]:
+    """Un rapport annuel publie aussi les chiffres des 2 exercices précédents (colonnes comparatives).
+    Les chiffres de l'année N se trouvent donc dans les rapports N, N+1 et N+2."""
+    if not year or not str(year).isdigit():
+        return [year] if year else []
+    return [str(int(year) + offset) for offset in range(3)]
+
+
 def build_filter(company: str | None = None, year: str | None = None) -> models.Filter | None:
-    conditions = [
-        models.FieldCondition(key=key, match=models.MatchValue(value=value))
-        for key, value in (("company", company), ("year", year)) if value
-    ]
+    conditions = []
+    if company:
+        conditions.append(models.FieldCondition(key="company", match=models.MatchValue(value=company)))
+    if year:
+        conditions.append(models.FieldCondition(key="year", match=models.MatchAny(any=report_years(year))))
     return models.Filter(must=conditions) if conditions else None
 
 
