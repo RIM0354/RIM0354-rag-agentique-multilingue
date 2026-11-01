@@ -4,7 +4,6 @@ Les embeddings denses viennent soit de l'API Gemini (EMBED_PROVIDER=gemini),
 soit du modèle local BGE-M3 (EMBED_PROVIDER=local).
 """
 import math
-import time
 from functools import lru_cache
 
 from fastembed import SparseTextEmbedding
@@ -35,20 +34,17 @@ def _normalize(v: list[float]) -> list[float]:
 def _gemini_embed(texts: list[str], task_type: str) -> list[list[float]]:
     from google.genai import types
 
-    from .llm import gemini_client
+    from .llm import gemini_client, with_retry
 
     config = types.EmbedContentConfig(task_type=task_type, output_dimensionality=DENSE_DIM)
     vectors: list[list[float]] = []
     for start in range(0, len(texts), GEMINI_BATCH):
         batch = texts[start:start + GEMINI_BATCH]
-        for attempt in range(6):  # l'offre gratuite limite le débit : on réessaie en attendant
-            try:
-                result = gemini_client().models.embed_content(model=GEMINI_EMBED_MODEL, contents=batch, config=config)
-                break
-            except Exception as exc:  # noqa: BLE001
-                if attempt == 5 or not any(code in str(exc) for code in ("429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE")):
-                    raise
-                time.sleep(2 ** attempt * 5)
+        # l'offre gratuite limite le débit : on réessaie en attendant
+        result = with_retry(
+            lambda b: gemini_client().models.embed_content(model=GEMINI_EMBED_MODEL, contents=b, config=config),
+            batch, attempts=6, base_delay=5.0,
+        )
         # en dessous de 3072 dimensions, Google demande de renormaliser les vecteurs
         vectors.extend(_normalize(list(e.values)) for e in result.embeddings)
     return vectors

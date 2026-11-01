@@ -4,6 +4,7 @@ Le fournisseur se choisit dans le .env avec LLM_PROVIDER (gemini ou groq).
 """
 import json
 import os
+import time
 from functools import lru_cache
 
 from .config import GEMINI_API_KEY, GROQ_API_KEY, LLM_MODEL, LLM_PROVIDER
@@ -57,11 +58,24 @@ def _chat_groq(system: str, user: str, as_json: bool, temperature: float) -> str
     return completion.choices[0].message.content or ""
 
 
+RETRYABLE = ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "overloaded")
+
+
+def with_retry(fn, *args, attempts: int = 5, base_delay: float = 4.0):
+    """Réessaie quand l'API est surchargée (503) ou limite le débit (429), avec un délai croissant."""
+    for attempt in range(attempts):
+        try:
+            return fn(*args)
+        except Exception as exc:  # noqa: BLE001
+            if attempt == attempts - 1 or not any(code in str(exc) for code in RETRYABLE):
+                raise
+            time.sleep(base_delay * 2 ** attempt)
+
+
 @observe(as_type="generation")
 def chat(system: str, user: str, as_json: bool = False, temperature: float = 0.0) -> str:
-    if LLM_PROVIDER == "groq":
-        return _chat_groq(system, user, as_json, temperature)
-    return _chat_gemini(system, user, as_json, temperature)
+    fn = _chat_groq if LLM_PROVIDER == "groq" else _chat_gemini
+    return with_retry(fn, system, user, as_json, temperature)
 
 
 def chat_json(system: str, user: str) -> dict:
