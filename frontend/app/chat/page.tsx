@@ -46,6 +46,9 @@ export default function ChatPage() {
       });
     }
     fetchCompanies().then(setCompanies);
+    // Société présélectionnée depuis la page d'accueil (/chat?company=...)
+    const preset = new URLSearchParams(window.location.search).get("company");
+    if (preset) setCompany(preset);
   }, [router]);
 
   useEffect(() => {

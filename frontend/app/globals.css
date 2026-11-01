@@ -33,3 +33,92 @@ body {
 .prose-answer ul { @apply mb-3 list-disc pl-5; }
 .prose-answer ol { @apply mb-3 list-decimal pl-5; }
 .prose-answer strong { @apply font-semibold; }
+
+/* ───────────── Univers surréaliste (page d'accueil) ───────────── */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin-angle { to { --angle: 360deg; } }
+@keyframes coin-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes breathe { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.08); opacity: 1; } }
+
+/* Bordure iridescente qui tourne autour de l'élément */
+.iridescent {
+  position: relative;
+  isolation: isolate;
+}
+.iridescent::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--angle), #7c3aed, #22d3ee, #f0abfc, #fde68a, #34d399, #7c3aed);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-angle 6s linear infinite;
+  z-index: -1;
+}
+
+/* Verre givré */
+.frost {
+  background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.02));
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 30px 80px -30px rgba(0,0,0,.8);
+}
+
+/* Pièce métallique en 3D */
+.coin {
+  transform-style: preserve-3d;
+  animation: coin-spin var(--spin, 6s) linear infinite;
+}
+.coin-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  backface-visibility: hidden;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  color: rgba(40, 24, 0, .82);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.95), transparent 32%),
+    conic-gradient(from 210deg, var(--c1), var(--c2), var(--c1), var(--c3), var(--c1));
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,.35), inset 0 -6px 12px rgba(0,0,0,.35), 0 0 30px var(--glow);
+  text-shadow: 0 1px 0 rgba(255,255,255,.6);
+}
+.coin-face.back { transform: rotateY(180deg); }
+
+.metal-text {
+  background: linear-gradient(110deg, #c4b5fd 0%, #f5f3ff 25%, #67e8f9 45%, #fde68a 65%, #f0abfc 85%, #c4b5fd 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 8s linear infinite;
+}
+
+.marquee { animation: marquee var(--duration, 40s) linear infinite; }
+.marquee:hover { animation-play-state: paused; }
+
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  pointer-events: none;
+  opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 60;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coin, .marquee, .metal-text, .iridescent::before { animation: none !important; }
+}
