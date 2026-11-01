@@ -28,6 +28,12 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini" if GEMINI_API_KEY or not GROQ_API_KEY else "groq").lower()
 _DEFAULT_MODELS = {"gemini": "gemini-3.8-flash", "groq": "llama-3.3-70b-versatile"}
 LLM_MODEL = os.getenv("LLM_MODEL") or _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3.8-flash")
+# Modèles de secours : l'offre gratuite de Gemini compte les quotas par modèle,
+# donc quand un modèle atteint sa limite du jour, on passe au suivant.
+LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv(
+    "LLM_FALLBACK_MODELS",
+    "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite" if LLM_PROVIDER == "gemini" else "",
+).split(",") if m.strip() and m.strip() != LLM_MODEL]
 
 # Embeddings denses : "gemini" (API, rien à télécharger) ou "local" (BGE-M3, 2,3 Go).
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "gemini" if GEMINI_API_KEY else "local").lower()

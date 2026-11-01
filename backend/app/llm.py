@@ -7,7 +7,7 @@ import os
 import time
 from functools import lru_cache
 
-from .config import GEMINI_API_KEY, GROQ_API_KEY, LLM_MODEL, LLM_PROVIDER
+from .config import GEMINI_API_KEY, GROQ_API_KEY, LLM_FALLBACK_MODELS, LLM_MODEL, LLM_PROVIDER
 
 # Langfuse est optionnel : il trace chaque appel (latence, tokens, coût) si les clés existent.
 if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
@@ -35,7 +35,25 @@ def groq_client():
     return Groq(api_key=GROQ_API_KEY)
 
 
+_exhausted: set[str] = set()  # modèles dont le quota du jour est épuisé
+
+
 def _chat_gemini(system: str, user: str, as_json: bool, temperature: float) -> str:
+    """Essaie le modèle principal puis les modèles de secours quand un quota (429) est atteint."""
+    models_to_try = [m for m in [LLM_MODEL, *LLM_FALLBACK_MODELS] if m not in _exhausted] or [LLM_MODEL]
+    for i, model in enumerate(models_to_try):
+        try:
+            return with_retry(_gemini_call, model, system, user, as_json, temperature, retry_quota=False)
+        except Exception as exc:  # noqa: BLE001
+            quota = "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)
+            if not quota or i == len(models_to_try) - 1:
+                raise
+            _exhausted.add(model)
+            print(f"[llm] quota atteint pour {model}, passage à {models_to_try[i + 1]}")
+    raise RuntimeError("Aucun modèle disponible")
+
+
+def _gemini_call(model: str, system: str, user: str, as_json: bool, temperature: float) -> str:
     from google.genai import types
 
     config = types.GenerateContentConfig(
@@ -43,7 +61,7 @@ def _chat_gemini(system: str, user: str, as_json: bool, temperature: float) -> s
         temperature=temperature,
         response_mime_type="application/json" if as_json else None,
     )
-    response = gemini_client().models.generate_content(model=LLM_MODEL, contents=user, config=config)
+    response = gemini_client().models.generate_content(model=model, contents=user, config=config)
     return response.text or ""
 
 
@@ -58,24 +76,28 @@ def _chat_groq(system: str, user: str, as_json: bool, temperature: float) -> str
     return completion.choices[0].message.content or ""
 
 
-RETRYABLE = ("429", "500", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE", "overloaded")
+OVERLOADED = ("500", "503", "UNAVAILABLE", "overloaded")
+QUOTA = ("429", "RESOURCE_EXHAUSTED")
 
 
-def with_retry(fn, *args, attempts: int = 5, base_delay: float = 4.0):
-    """Réessaie quand l'API est surchargée (503) ou limite le débit (429), avec un délai croissant."""
+def with_retry(fn, *args, attempts: int = 5, base_delay: float = 4.0, retry_quota: bool = True):
+    """Réessaie quand l'API est surchargée (503) ou limite le débit (429), avec un délai croissant.
+    Avec retry_quota=False, une erreur de quota remonte tout de suite (pour changer de modèle)."""
+    retryable = OVERLOADED + (QUOTA if retry_quota else ())
     for attempt in range(attempts):
         try:
             return fn(*args)
         except Exception as exc:  # noqa: BLE001
-            if attempt == attempts - 1 or not any(code in str(exc) for code in RETRYABLE):
+            if attempt == attempts - 1 or not any(code in str(exc) for code in retryable):
                 raise
             time.sleep(base_delay * 2 ** attempt)
 
 
 @observe(as_type="generation")
 def chat(system: str, user: str, as_json: bool = False, temperature: float = 0.0) -> str:
-    fn = _chat_groq if LLM_PROVIDER == "groq" else _chat_gemini
-    return with_retry(fn, system, user, as_json, temperature)
+    if LLM_PROVIDER == "groq":
+        return with_retry(_chat_groq, system, user, as_json, temperature)
+    return _chat_gemini(system, user, as_json, temperature)
 
 
 def chat_json(system: str, user: str) -> dict:
