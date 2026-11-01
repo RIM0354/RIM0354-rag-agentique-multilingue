@@ -64,8 +64,8 @@ export default function Nucleus() {
                   key={i}
                   className="absolute"
                   style={{
-                    left: orbit.radius + Math.cos(angle) * orbit.radius - 22,
-                    top: orbit.radius + Math.sin(angle) * orbit.radius - 22,
+                    left: Math.round(orbit.radius + Math.cos(angle) * orbit.radius - 22),
+                    top: Math.round(orbit.radius + Math.sin(angle) * orbit.radius - 22),
                     transform: `rotateX(-${orbit.tilt}deg)`, // la pièce reste face à nous
                   }}
                 >
