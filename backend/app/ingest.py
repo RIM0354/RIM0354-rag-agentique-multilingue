@@ -42,12 +42,19 @@ def make_converter(ocr: bool, fast_tables: bool = False) -> DocumentConverter:
     return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)})
 
 
-def already_indexed(client: QdrantClient, company: str, year: str) -> bool:
-    flt = models.Filter(must=[
+def report_filter(company: str, year: str) -> models.Filter:
+    return models.Filter(must=[
         models.FieldCondition(key="company", match=models.MatchValue(value=company)),
         models.FieldCondition(key="year", match=models.MatchValue(value=year)),
     ])
-    return client.count(COLLECTION, count_filter=flt, exact=True).count > 0
+
+
+def delete_report(client: QdrantClient, company: str, year: str) -> None:
+    client.delete(COLLECTION, points_selector=report_filter(company, year))
+
+
+def already_indexed(client: QdrantClient, company: str, year: str) -> bool:
+    return client.count(COLLECTION, count_filter=report_filter(company, year), exact=True).count > 0
 
 
 def make_chunker() -> HybridChunker:
@@ -134,13 +141,7 @@ def ingest_pdf(pdf: Path, converter: DocumentConverter, chunker: HybridChunker, 
     n_tables = save_tables(doc, company, year)
 
     # On supprime d'abord les anciens chunks de ce rapport (ré-indexation propre)
-    client.delete(
-        COLLECTION,
-        points_selector=models.Filter(must=[
-            models.FieldCondition(key="company", match=models.MatchValue(value=company)),
-            models.FieldCondition(key="year", match=models.MatchValue(value=year)),
-        ]),
-    )
+    delete_report(client, company, year)
 
     records = []
     for chunk in chunker.chunk(doc):
@@ -154,14 +155,19 @@ def ingest_pdf(pdf: Path, converter: DocumentConverter, chunker: HybridChunker, 
             "source": str(pdf.relative_to(RAW_DIR)),
         })
 
-    for start in range(0, len(records), BATCH_SIZE):
-        batch = records[start:start + BATCH_SIZE]
-        texts = [r["text"] for r in batch]
-        dense, sparse = embed_dense(texts), embed_sparse(texts)
-        client.upsert(COLLECTION, points=[
-            models.PointStruct(id=str(uuid.uuid4()), vector={"dense": d, "bm25": s}, payload=r)
-            for r, d, s in zip(batch, dense, sparse)
-        ])
+    try:
+        for start in range(0, len(records), BATCH_SIZE):
+            batch = records[start:start + BATCH_SIZE]
+            texts = [r["text"] for r in batch]
+            dense, sparse = embed_dense(texts), embed_sparse(texts)
+            client.upsert(COLLECTION, points=[
+                models.PointStruct(id=str(uuid.uuid4()), vector={"dense": d, "bm25": s}, payload=r)
+                for r, d, s in zip(batch, dense, sparse)
+            ])
+    except BaseException:
+        # Un rapport à moitié indexé serait sauté par --skip-done : on le retire entièrement.
+        delete_report(client, company, year)
+        raise
 
     print(f"  {company} {year} : {len(records)} chunks, {n_tables} tableaux exportés")
     return len(records)
